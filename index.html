@@ -249,7 +249,7 @@ img{max-width:100%}
     <p>You just dug out of the nest. Crawl to the surf, dive to the seagrass on the sea floor, and survive as long as you can. Sand is slow going, and everything in the ocean is hungry. There is no finish line.</p>
     <dl class="rules">
       <dt>Move</dt><dd>Arrow keys or WASD. On a phone, drag anywhere on the screen.</dd>
-      <dt>Dash</dt><dd>Space, Shift or the Dash button. A quick burst of speed every few seconds. Underwater it costs a little air.</dd>
+      <dt>Dash</dt><dd>Space, Shift or the Dash button. A quick burst of speed every few seconds. Underwater it costs a little air. Dash straight up at the surface to leap out of the water.</dd>
       <dt>Dodge</dt><dd>A red ring marks where a gull will dive. Get out of it, or dive under the water.</dd>
       <dt>Eat</dt><dd>Seagrass on the bottom, small fish (chase them down) and jellyfish. Bite a jellyfish's bell; its tentacles sting. Plastic bags look like jellyfish. Eating one hurts.</dd>
       <dt>Hide</dt><dd>Leafy seagrass and the Kelp Forest make you hard for predators to spot.</dd>
@@ -747,7 +747,7 @@ function loadOcean(i){
 // Progress that carries over to the next generation of turtles
 const LEGACY = ["pts","mission","zones","oceans","gen","heirs","grass","fish","jellies","pearls","chests","gold","totalBites",
                 "reachedWater","rodeCurrent","wreckOpened","caveFound","relic","talked","iceBreath","clutches","babiesSaved","babiesRaised","rams","netsEscaped",
-                "secrets","compass","blackPearl","ventCrystal","galleonHint","bonusHp","starShell"];
+                "secrets","compass","blackPearl","ventCrystal","galleonHint","bonusHp","starShell","friends","allFriends","leaps","gullsEaten","rainbowTrail","moonPearl","thunderDash"];
 function newTurtle(startX){
   const S = STAGES[0];
   const t = {x:startX, y:0, r:S.r, vx:0, vy:0, ang:0, face:1, stage:0, hp:S.hp, air:S.air, inv:0, phase:0,
@@ -755,7 +755,7 @@ function newTurtle(startX){
        zones:new Set(), oceans:new Set(["atlantic"]), mission:0, reachedWater:false, rodeCurrent:false, curT:0, inCur:false, wreckOpened:false,
        zone:null, cave:false, caveFound:false, relic:false, bonusHp:0, swimming:false,
        net:null, netStruggle:0, netT:0, netCool:0, netsEscaped:0, talked:false, iceBreath:false, travelCd:0,
-       secrets:new Set(), bounceT:0, leap:false, starShell:false, compass:false, blackPearl:false, ventCrystal:false, galleonHint:false, ventHealT:0,
+       secrets:new Set(), bounceT:0, leap:false, leaps:0, gullsEaten:0, rainbowTrail:false, moonPearl:false, thunderDash:false, starShell:false, friends:new Set(), allFriends:false, compass:false, blackPearl:false, ventCrystal:false, galleonHint:false, ventHealT:0,
        gen:1, heirs:0, clutches:0, babiesSaved:0, babiesRaised:0, rams:0, nestCd:0, laying:0, lifeT:0, trail:[], trailT:0, babyThreat:null,
        dashT:0, dashCd:0, dashDir:[1,0], onLand:true, atSurface:false, hidden:false, eatT:0, suffT:0, chased:false, trackD:0};
   return t;
@@ -772,6 +772,7 @@ function reset(legacy){
     if (kept){
       T.secrets = new Set(kept.secrets);
       T.compass = !!kept.compass; T.blackPearl = !!kept.blackPearl; T.ventCrystal = !!kept.ventCrystal; T.starShell = !!kept.starShell;
+      T.rainbowTrail = !!kept.rainbowTrail; T.moonPearl = !!kept.moonPearl; T.thunderDash = !!kept.thunderDash;
       if (kept.relic){ T.relic = true; T.bonusHp = 1; T.hp = maxHp(); }
     }
   }
@@ -946,6 +947,7 @@ function update(dt){
   updateHazards(dt);
   updateNests(dt);
   if (active) updateBabies(dt);
+  if (OCEAN.secretLevel) updateSkyTurtles(dt);
   if (elder){ elder.phase += dt*1.5; if (elder.treasureCd > 0) elder.treasureCd -= dt; elder.face = T.x >= elder.x ? 1 : -1; }
   if (active) updateChests(dt);
   updateParts(dt);
@@ -1045,7 +1047,8 @@ function updateTurtle(dt){
     T.cave = false;
   }
   if (T.leap){
-    if (T.vy > 0 && T.y > SURF - T.r*.5){ T.leap = false; burst(T.x, SURF, 16, "splash"); }
+    if (T.onLand){ T.leap = false; burst(T.x, T.y + T.r*.5, 10, "sand"); }
+    else if (T.vy > 0 && T.y > SURF - T.r*.5 && groundY(T.x) > SURF + 4){ T.leap = false; burst(T.x, SURF, 16, "splash"); }
   } else if (!T.cave && groundY(T.x) > SURF + 4 && T.y < SURF - T.r*.5){ T.y = SURF - T.r*.5; if (T.vy < 0) T.vy = 0; }
   // sea ice: a solid ceiling except at the gaps
   if (OCEAN.ice && iceAt(T.x) && T.y < SURF + ICE_D + T.r*.6){ T.y = SURF + ICE_D + T.r*.6; if (T.vy < 0) T.vy = 0; }
@@ -1173,7 +1176,7 @@ function updateTurtle(dt){
         j.dead = 20; T.jellies++; T.bites++; T.totalBites++;
         addPts(20, j.x, j.y - 14, "#e9a6f0");
         checkGrowth();
-      } else if (T.inv <= 0 && Math.abs(T.x - j.x) < s*.7 + T.r*.55 && T.y > j.y - T.r*.3 && T.y < j.y + s*2.3 + T.r*.4){
+      } else if (T.inv <= 0 && !T.moonPearl && Math.abs(T.x - j.x) < s*.7 + T.r*.55 && T.y > j.y - T.r*.3 && T.y < j.y + s*2.3 + T.r*.4){
         // brushed the trailing tentacles
         damage("jelly");
         T.vx *= .3; T.vy *= .3;
@@ -1190,7 +1193,7 @@ function updateTurtle(dt){
         const tx = h.x + Math.sin(time*1.2 + h.ph)*6;
         hit = Math.abs(T.x - tx) < 12 + T.r*.5 && T.y > SURF - 14 && T.y < SURF + h.len;
       }
-      if (hit && T.inv <= 0){
+      if (hit && T.inv <= 0 && !(T.moonPearl && h.type === "manowar")){
         damage(h.type);
         T.vx *= .3; T.vy *= .3;
         for (let b = 0; b < 8; b++) parts.push({x:T.x, y:T.y, vx:rnd(-60,60), vy:rnd(-60,60), life:.6, max:.6, type:"sting", r:rnd(1.5,2.5)});
@@ -1485,12 +1488,149 @@ function loseBaby(b, cause){
   toast(`A ${cause} got one of your hatchlings!`, true, 2.4);
 }
 
+/* ---------- Other sea turtles in the Sky Sea ---------- */
+// You're a green sea turtle; these are the other six species, each with a true fact
+const SPECIES = [
+  {id:"leatherback", name:"Lumen", kind:"leatherback", r:30, ridges:true,
+   pal:{shell:"#26292b", rim:"#3a3e41", skin:"#4c5154", scute:"rgba(220,230,235,.12)"},
+   line:"I'm a leatherback. No hard shell, just tough leathery skin. Back home I dive deeper than a kilometer.",
+   hint:"Psst. Something glints inside one of the clouds on the floor, out past the middle."},
+  {id:"hawksbill", name:"Tortie", kind:"hawksbill", r:19,
+   pal:{shell:"#7a4a1e", rim:"#a8692c", skin:"#b88a5a", scute:"rgba(255,210,120,.5)"},
+   line:"Hawksbill here. See my pointy beak? It's perfect for picking sponges out of coral.",
+   hint:"I saw a turtle leap right up through the rainbow once. Lucky thing."},
+  {id:"loggerhead", name:"Big Lou", kind:"loggerhead", r:25,
+   pal:{shell:"#8a4a28", rim:"#a8633a", skin:"#c79a6a", scute:"rgba(255,220,180,.25)"},
+   line:"Loggerhead! My big head holds jaws strong enough to crunch crabs and conchs.",
+   hint:"See that grumpy little storm cloud out east? Jump into it if you dare."},
+  {id:"olive", name:"Olive", kind:"olive ridley", r:18,
+   pal:{shell:"#6b6f3c", rim:"#868a52", skin:"#a4a37a", scute:"rgba(240,245,200,.25)"},
+   line:"Olive ridleys nest together, thousands of us on one beach in a few nights. It's called an arribada.",
+   hint:"Look up from the middle of the sea. Some of those stars make a turtle."},
+  {id:"kemps", name:"Kemp", kind:"Kemp's ridley", r:15,
+   pal:{shell:"#5f6662", rim:"#7a827d", skin:"#a9b0a8", scute:"rgba(235,240,235,.25)"},
+   line:"I'm a Kemp's ridley, the smallest sea turtle of all, and the rarest.",
+   hint:"The Wishing Star is by the Moon Gate, way out east. It'll make you grow."},
+  {id:"flatback", name:"Flats", kind:"flatback", r:22,
+   pal:{shell:"#9a9a6a", rim:"#b3b383", skin:"#c9c4a0", scute:"rgba(255,255,230,.3)"},
+   line:"Flatback, from Australia. We never cross whole oceans. We like to stay close to home.",
+   hint:"This sea hides five secrets. The Sky Sea itself is one. Can you find the rest?"}
+];
+function makeSkyTurtles(){
+  return SPECIES.map((sp, i) => {
+    const x = 500 + i*880 + rnd(-150, 150);
+    const y = rnd(SURF + 80, groundY(x) - 100);
+    return {sp, x, y, vx:0, vy:0, tx:x, ty:y, wt:rnd(0,3), face:1, ang:0, phase:rnd(0,TAU), met:T.friends.has(sp.id),
+            leap:false, leapT:rnd(4, 12), escortT:0, say:0};
+  });
+}
+function updateSkyTurtles(dt){
+  const S = secretObj; if (!S || !S.turtles) return;
+  for (const t of S.turtles){
+    const r = t.sp.r, d = Math.hypot(T.x - t.x, T.y - t.y);
+    if (t.say > 0) t.say -= dt;
+    if (t.leap){
+      t.vy += 900*dt; t.x += t.vx*dt; t.y += t.vy*dt; t.phase += dt*10;
+      t.ang = Math.atan2(t.vy, t.vx || .01);
+      if (t.vy > 0 && t.y > SURF){ t.leap = false; t.vy *= .3; burst(t.x, SURF, 12, "splash"); }
+      continue;
+    }
+    t.wt -= dt; t.leapT -= dt;
+    if (d < 230 && T.swimming && state === "play"){ t.escortT = 3; }
+    if (t.escortT > 0){
+      t.escortT -= dt;
+      t.tx = T.x - T.face*(r + T.r + 30); t.ty = T.y + (t.sp.r > 22 ? 40 : -36);
+    } else if (t.wt <= 0){
+      t.wt = rnd(3, 7);
+      t.tx = clamp(t.x + rnd(-500, 500), 150, W - 150);
+      t.ty = rnd(SURF + 50, Math.max(SURF + 60, groundY(t.tx) - 90));
+    }
+    // now and then, a playful leap out of the water
+    if (t.leapT <= 0 && t.y < SURF + 140 && t.escortT <= 0){
+      t.leapT = rnd(8, 16); t.leap = true; t.vy = -620 - r*4; t.vx = t.face*rnd(140, 220);
+      burst(t.x, SURF, 12, "splash");
+      continue;
+    } else if (t.leapT <= 0){ t.ty = SURF + 60; t.leapT = 1.5; }
+    const dx = t.tx - t.x, dy = t.ty - t.y, dd = Math.hypot(dx, dy) || 1;
+    const sp = Math.min(t.escortT > 0 ? 240 : 95, dd*1.8);
+    const k = Math.min(1, dt*2);
+    t.vx += (dx/dd*sp - t.vx)*k; t.vy += (dy/dd*sp - t.vy)*k;
+    t.x = clamp(t.x + t.vx*dt, 60, W - 60);
+    t.y = clamp(t.y + t.vy*dt, SURF + r*.6, Math.max(SURF + 30, groundY(t.x) - r - 10));
+    if (Math.abs(t.vx) > 6) t.face = t.vx > 0 ? 1 : -1;
+    const target = Math.hypot(t.vx, t.vy) > 12 ? Math.atan2(t.vy, t.vx) : (t.face > 0 ? 0 : Math.PI);
+    t.ang = angLerp(t.ang, target, Math.min(1, dt*5));
+    t.phase += dt*(2.5 + Math.hypot(t.vx, t.vy)/45);
+    // say hello the first time you swim up
+    if (state === "play" && d < T.r + r + 26){
+      if (!t.met){
+        t.met = true; T.friends.add(t.sp.id); T.pts += 75;
+        floatText("+75", t.x, t.y - r - 34, "#6cbf73");
+        if (T.friends.size >= SPECIES.length && !T.allFriends){
+          T.allFriends = true; T.pts += 500;
+          toast("You met every other kind of sea turtle! +500", "good", 3.4);
+        }
+      }
+      if (t.say <= 0){ t.say = 6; t.talks = (t.talks || 0) + 1; }
+    }
+  }
+}
+function wrapText(text, maxW){
+  const words = text.split(" "), lines = []; let line = "";
+  for (const w of words){
+    const test = line ? line + " " + w : w;
+    if (ctx.measureText(test).width > maxW && line){ lines.push(line); line = w; } else line = test;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+function drawSkyTurtles(){
+  const S = secretObj; if (!S || !S.turtles) return;
+  for (const t of S.turtles){
+    if (!visible(t.x, 260)) continue;
+    const r = t.sp.r;
+    drawTurtle(t.x, t.y, r, t.ang, t.phase, 0, true, 1, t.sp.pal);
+    if (t.sp.ridges){
+      ctx.save(); ctx.translate(t.x, t.y); ctx.rotate(t.ang);
+      ctx.strokeStyle = "rgba(200,210,215,.35)"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); for (const oy of [-.42, -.2, 0, .2, .42]){ ctx.moveTo(-r*.8, oy*r); ctx.lineTo(r*.8, oy*r*.85); } ctx.stroke();
+      ctx.restore();
+    }
+    if (!t.met){
+      const y = t.y - r - 20 + Math.sin(time*3 + t.phase)*3;
+      ctx.fillStyle = "rgba(6,22,37,.8)"; ctx.beginPath(); ctx.arc(t.x, y, 10, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "#6cbf73"; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = "#6cbf73"; ctx.font = "15px 'Lilita One', system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("!", t.x, y + 1); ctx.textBaseline = "alphabetic";
+    }
+    if (t.say > 0){
+      const a = Math.min(1, t.say, 6 - t.say + .01);
+      ctx.save(); ctx.globalAlpha = clamp(a*2, 0, 1);
+      ctx.font = "13px 'Atkinson Hyperlegible', system-ui, sans-serif";
+      const lines = wrapText(t.talks > 1 ? t.sp.hint : t.sp.line, 220);
+      const head = `${t.sp.name} · ${t.sp.kind}`;
+      const w = 244, h = 26 + lines.length*17, bx = t.x - w/2, by = t.y - r - 30 - h;
+      ctx.fillStyle = "rgba(6,22,37,.9)"; ctx.strokeStyle = "rgba(108,191,115,.55)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx, by, w, h, 10) : ctx.rect(bx, by, w, h); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(t.x - 7, by + h); ctx.lineTo(t.x, by + h + 9); ctx.lineTo(t.x + 7, by + h); ctx.closePath(); ctx.fill();
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#6cbf73"; ctx.font = "700 12px 'Atkinson Hyperlegible', system-ui, sans-serif";
+      ctx.fillText(head, bx + 12, by + 18);
+      ctx.fillStyle = "#eaf4ee"; ctx.font = "13px 'Atkinson Hyperlegible', system-ui, sans-serif";
+      lines.forEach((ln, i) => ctx.fillText(ln, bx + 12, by + 36 + i*17));
+      ctx.restore();
+    }
+  }
+}
+
 /* ---------- Ocean secrets ---------- */
-const SECRET_NAMES = {cave:"Hidden Cave", galleon:"Lost Galleon", grotto:"Glowing Grotto", vents:"Warm Vents", sky:"Sky Sea", startrtl:"Star Turtle"};
-const SECRET_TOTAL = 6;
+const SECRET_NAMES = {cave:"Hidden Cave", galleon:"Lost Galleon", grotto:"Glowing Grotto", vents:"Warm Vents", sky:"Sky Sea", startrtl:"Star Turtle",
+                      rainbow:"Rainbow Leap", moonpearl:"Moon Pearl", storm:"Storm Cloud"};
+const SECRET_TOTAL = 9;
 const SECRETS_KEY = "turtle-cove-secrets";
 function saveSecrets(){
-  try { localStorage.setItem(SECRETS_KEY, JSON.stringify({secrets:[...T.secrets], compass:T.compass, blackPearl:T.blackPearl, ventCrystal:T.ventCrystal, relic:T.relic, starShell:T.starShell})); } catch(_){}
+  try { localStorage.setItem(SECRETS_KEY, JSON.stringify({secrets:[...T.secrets], compass:T.compass, blackPearl:T.blackPearl, ventCrystal:T.ventCrystal, relic:T.relic, starShell:T.starShell,
+      rainbowTrail:T.rainbowTrail, moonPearl:T.moonPearl, thunderDash:T.thunderDash})); } catch(_){}
 }
 function loadSecrets(){
   try { const v = JSON.parse(localStorage.getItem(SECRETS_KEY) || "null"); return v && Array.isArray(v.secrets) ? v : null; } catch(_) { return null; }
@@ -1525,7 +1665,10 @@ function makeSecret(){
     const cx = 3100, cy = SURF - 250;
     const pts = [[0,0],[-60,-28],[0,-50],[60,-28],[66,24],[0,48],[-66,24],[104,-6],[126,-14],[44,-74],[-44,-74],[44,74],[-44,74],[-98,6]];
     const lines = [[1,2],[2,3],[3,4],[4,5],[5,6],[6,1],[3,7],[7,8],[2,9],[1,10],[4,11],[6,12],[1,13],[6,13],[0,2],[0,5]];
-    return {type:"sky", stars, wish:{x:wx, y:groundY(wx) - 140, taken:false},
+    return {type:"sky", stars, wish:{x:wx, y:groundY(wx) - 140, taken:false}, turtles:makeSkyTurtles(),
+            rainbow:{x:1800, r:150, found:false},
+            pearl:{x:2620, y:groundY(2620) - 4, found:false},
+            storm:{x:4300, y:SURF - 230, ph:rnd(0,TAU), flash:0, found:false},
             con:{x:cx, y:cy, pts:pts.map(([dx, dy]) => ({x:cx + dx, y:cy + dy, ph:rnd(0,TAU)})), lines, lit:0, found:false}};
   }
   if (OCEAN.id === "arctic"){
@@ -1589,6 +1732,31 @@ function checkSecrets(dt){
       for (let k = 0; k < 60; k++){ const a = rnd(0,TAU), sp = rnd(60,240); parts.push({x:con.x, y:con.y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:rnd(1,2), max:2, type:"gold", r:rnd(1.5,3.5)}); }
     }
     if (con && con.found) con.lit = Math.min(1, con.lit + dt*.8);
+    // leap up through the middle of the rainbow
+    const rb = S.rainbow;
+    if (rb && !rb.found && T.leap && Math.abs(T.x - rb.x) < 80 && T.y < SURF - rb.r*.72 && T.y > SURF - rb.r*1.2){
+      rb.found = true; secretFound("rainbow", SECRET_NAMES.rainbow);
+      if (!T.rainbowTrail){ T.rainbowTrail = true; T.pts += 600; saveSecrets(); floatText("+600", T.x, T.y - 40, "#ffd84d");
+        toast("Rainbow Leap! Your jumps now go higher and leave a rainbow trail.", "good", 3.6); }
+    }
+    // the pearl hidden inside a cloud on the sea floor
+    const pl = S.pearl;
+    if (pl && !pl.found && Math.hypot(T.x - pl.x, T.y - pl.y) < T.r + 26){
+      pl.found = true; secretFound("moonpearl", SECRET_NAMES.moonpearl);
+      if (!T.moonPearl){ T.moonPearl = true; T.pts += 600; saveSecrets(); floatText("+600", pl.x, pl.y - 40, "#e8e4ff");
+        toast("Moon Pearl! Jellyfish and man o' war stings can't hurt you anymore.", "good", 3.6); }
+    }
+    // the grumpy little storm cloud above the water
+    const sc = S.storm;
+    if (sc){
+      sc.x = 4300 + Math.sin(time*.25 + sc.ph)*80;
+      if (sc.flash > 0) sc.flash -= dt; else if (Math.random() < dt*.35) sc.flash = .18;
+      if (!sc.found && T.leap && Math.hypot(T.x - sc.x, T.y - sc.y) < T.r + 56){
+        sc.found = true; sc.flash = .5; secretFound("storm", SECRET_NAMES.storm);
+        if (!T.thunderDash){ T.thunderDash = true; T.pts += 600; saveSecrets(); floatText("+600", sc.x, sc.y - 50, "#bfe3ff");
+          toast("Thunder Dash! At any size, dashing into a predator drives it off.", "good", 3.6); }
+      }
+    }
     const w = S.wish;
     if (!w.taken && Math.hypot(w.x - T.x, w.y - T.y) < T.r + 30){
       w.taken = true; T.pts += 1000;
@@ -1820,7 +1988,55 @@ function drawConstellation(con){
     ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, TAU); ctx.fill();
   });
 }
+function drawSkyExtras(S){
+  const rb = S.rainbow;
+  if (rb && visible(rb.x, rb.r + 40) && cam.y < SURF + 20){
+    const cols = ["#ff5f6d","#ffa94d","#ffe066","#69db7c","#4dabf7","#9775fa"];
+    ctx.save(); ctx.globalAlpha = rb.found ? .75 : .45 + .1*Math.sin(time*1.5);
+    ctx.lineWidth = 7;
+    cols.forEach((c, i) => { ctx.strokeStyle = c; ctx.beginPath(); ctx.arc(rb.x, SURF + 4, rb.r - i*7, Math.PI, TAU); ctx.stroke(); });
+    ctx.restore();
+  }
+  const pl = S.pearl;
+  if (pl && visible(pl.x, 80)){
+    if (pl.found){
+      ctx.fillStyle = "rgba(255,255,255,.95)"; ctx.beginPath(); ctx.arc(pl.x, pl.y + 10, 30, 0, TAU); ctx.fill();
+    } else {
+      const k = .5 + .5*Math.sin(time*2.6);
+      const g = ctx.createRadialGradient(pl.x, pl.y, 2, pl.x, pl.y, 50);
+      g.addColorStop(0, `rgba(230,225,255,${.5*k})`); g.addColorStop(1, "rgba(230,225,255,0)");
+      ctx.fillStyle = g; ctx.fillRect(pl.x - 50, pl.y - 50, 100, 100);
+      ctx.fillStyle = "#f4f2ff"; ctx.beginPath(); ctx.arc(pl.x, pl.y, 7, 0, TAU); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,.88)"; ctx.beginPath(); ctx.arc(pl.x + 8, pl.y + 6, 26, 0, TAU); ctx.arc(pl.x - 14, pl.y + 10, 20, 0, TAU); ctx.fill();
+      for (let i = 0; i < 3; i++){
+        const kk = Math.max(0, Math.sin(time*3 + i*2));
+        const sx = pl.x - 18 + i*18, sy = pl.y - 14 - (i % 2)*8;
+        ctx.strokeStyle = `rgba(255,255,255,${kk})`; ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(sx - 4*kk, sy); ctx.lineTo(sx + 4*kk, sy); ctx.moveTo(sx, sy - 4*kk); ctx.lineTo(sx, sy + 4*kk); ctx.stroke();
+      }
+    }
+  }
+  const sc = S.storm;
+  if (sc && visible(sc.x, 120) && cam.y < SURF){
+    ctx.fillStyle = sc.found ? "rgba(150,160,190,.75)" : "rgba(70,72,96,.92)";
+    for (const [dx, dy, r] of [[-34, 6, 26], [0, -6, 34], [36, 4, 26], [16, 14, 24], [-14, 14, 24]]){ ctx.beginPath(); ctx.arc(sc.x + dx, sc.y + dy, r, 0, TAU); ctx.fill(); }
+    if (sc.flash > 0){
+      ctx.strokeStyle = "rgba(255,248,180,.95)"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(sc.x - 4, sc.y + 26); ctx.lineTo(sc.x + 8, sc.y + 50); ctx.lineTo(sc.x - 2, sc.y + 54); ctx.lineTo(sc.x + 10, sc.y + 84); ctx.stroke();
+      const g = ctx.createRadialGradient(sc.x, sc.y, 4, sc.x, sc.y, 90);
+      g.addColorStop(0, "rgba(255,250,200,.35)"); g.addColorStop(1, "rgba(255,250,200,0)");
+      ctx.fillStyle = g; ctx.fillRect(sc.x - 90, sc.y - 90, 180, 180);
+    }
+    if (!sc.found){
+      ctx.fillStyle = "#1c1e2a";
+      ctx.beginPath(); ctx.arc(sc.x - 10, sc.y + 2, 2.6, 0, TAU); ctx.arc(sc.x + 10, sc.y + 2, 2.6, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "#1c1e2a"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(sc.x - 15, sc.y - 6); ctx.lineTo(sc.x - 6, sc.y - 3); ctx.moveTo(sc.x + 15, sc.y - 6); ctx.lineTo(sc.x + 6, sc.y - 3); ctx.stroke();
+    }
+  }
+}
 function drawSkySecret(S){
+  drawSkyExtras(S);
   if (S.con) drawConstellation(S.con);
   for (const st of S.stars){
     if (st.taken || !visible(st.x, 30) || st.y < cam.y - 30 || st.y > cam.y + viewH + 30) continue;
@@ -1912,8 +2128,9 @@ function tryDash(){
   if (Math.hypot(dx, dy) < .2){ dx = T.swimming ? Math.cos(T.ang) : T.face; dy = T.swimming ? Math.sin(T.ang) : 0; }
   const l = Math.hypot(dx, dy) || 1;
   T.dashDir = [dx/l, dy/l]; T.dashT = .35; T.dashCd = dashMax();
-  if (OCEAN.secretLevel && T.swimming && !T.leap && T.y < SURF + T.r*2 && T.dashDir[1] < -.4){
-    T.leap = true; T.dashT = 0; T.vy = -780; T.vx = T.dashDir[0]*260;
+  // dashing upward at the surface leaps you out of the water (not under ice or inside a cave)
+  if (T.swimming && !T.leap && !T.cave && !(OCEAN.ice && iceAt(T.x)) && T.y < SURF + T.r*2 && T.dashDir[1] < -.4){
+    T.leap = true; T.leaps++; T.dashT = 0; T.vy = T.rainbowTrail ? -880 : -780; T.vx = T.dashDir[0]*260;
     burst(T.x, SURF, 18, "splash");
     return;
   }
@@ -1941,6 +2158,8 @@ const MISSIONS = [
   {text:"Reach the water",                         done:() => T.reachedWater, pts:20},
   {text:"Eat 5 bites of seagrass",       n:5,  val:() => T.grass,      pts:50},
   {text:"Catch 3 small fish",            n:3,  val:() => T.fish,       pts:60},
+  {text:"Dash straight up at the surface to leap out of the water", done:() => T.leaps >= 1, pts:50},
+  {text:"Leap out of the water and catch a gull", done:() => T.gullsEaten >= 1, pts:150},
   {text:"Grow into a juvenile",                    done:() => T.stage >= 1 || T.gen > 1, pts:100},
   {text:"Eat 3 jellyfish",               n:3,  val:() => T.jellies,    pts:80},
   {text:"Find a sunken chest",           n:1,  val:() => T.chests,     pts:100},
@@ -1962,6 +2181,7 @@ const MISSIONS = [
   {text:"Swim down into the Abyss",                done:() => T.zones.has("The Abyss"), pts:250},
   {text:"Open the jeweled chest in the shipwreck", done:() => T.wreckOpened, pts:300},
   {text:"Raise a second generation",               done:() => T.gen >= 2, pts:300},
+  {text:"Meet all 6 other kinds of sea turtle in the Sky Sea", n:6, val:() => T.friends.size, pts:500},
   {text:`Find all ${SECRET_TOTAL} secrets`, n:SECRET_TOTAL, val:() => T.secrets.size, pts:1000},
   {text:`Discover all ${TOTAL_ZONES} ocean zones`, n:TOTAL_ZONES, val:() => T.zones.size, pts:600},
   {text:"Catch 40 fish",                 n:40, val:() => T.fish,       pts:300},
@@ -1979,10 +2199,29 @@ function updateMissions(){
   }
 }
 
+const GULL_RESPAWN = 300;   // seconds before an eaten gull comes back
 function updateGulls(dt, active){
   const tr = STAGES[T.stage].r;
   const canHunt = active && T.stage === 0 && (T.onLand || T.atSurface) && T.x < 1700;
   for (const g of gulls){
+    if (g.dead){
+      if (runT >= g.respawnAt){
+        g.dead = false; g.state = "circle"; g.t = rnd(3, 6);
+        g.x = T.x + (Math.random() < .5 ? -1 : 1)*(viewW*.6); g.y = 60;
+        if (active) toast("A new gull is circling overhead.", false, 2);
+      }
+      continue;
+    }
+    // leaping turtles can snatch a gull out of the air
+    if (active && T.leap && Math.hypot(T.x - g.x, T.y - g.y) < T.r + 18){
+      g.dead = true; g.respawnAt = runT + GULL_RESPAWN;
+      T.gullsEaten++; T.bites++; T.totalBites++;
+      addPts(60, g.x, g.y - 20, "#f4ecc9");
+      for (let k = 0; k < 18; k++) parts.push({x:g.x, y:g.y, vx:rnd(-90,90), vy:rnd(-110,40), life:rnd(1,1.8), max:1.8, type:"feather", r:rnd(2,3.5)});
+      toast(T.gullsEaten === 1 ? "You caught a gull! Turnabout is fair play. +60" : "Caught a gull! +60", "good", 2.2);
+      checkGrowth();
+      continue;
+    }
     g.phase += dt*(g.state === "dive" ? 2 : 8);
     if (g.state === "circle"){
       const hx = T.x + Math.cos(time*.55 + g.off)*240, hy = 105 + Math.sin(time*.9 + g.off)*28;
@@ -1992,7 +2231,7 @@ function updateGulls(dt, active){
       g.x = nx; g.y = lerp(g.y, hy, k);
       g.t -= dt;
       if (g.t <= 0){
-        const busy = gulls.some(o => o !== g && (o.state === "mark" || o.state === "dive"));
+        const busy = gulls.some(o => o !== g && !o.dead && (o.state === "mark" || o.state === "dive"));
         const crawlers = babies.filter(b => b.state === "crawl");
         if (canHunt && !busy){
           g.state = "mark"; g.mt = 1.25; g.t = g.mt; g.prey = "player";
@@ -2045,7 +2284,7 @@ function updatePreds(dt, active){
     const s = p.s;
     if (!active && p.prey){ p.prey = null; p.state = "patrol"; }
     // an adult dashing into a predator drives it off
-    if (active && T.dashT > 0 && T.stage === 2 && p.state !== "flee" && Math.hypot(T.x - p.x, T.y - p.y) < T.r + (s.leash ? 18 : s.len*.32)){
+    if (active && T.dashT > 0 && (T.stage === 2 || T.thunderDash) && p.state !== "flee" && Math.hypot(T.x - p.x, T.y - p.y) < T.r + (s.leash ? 18 : s.len*.32)){
       p.state = "flee"; p.fleeT = 2.6; p.tired = 7; p.prey = null;
       const ax = Math.sign(p.x - T.x) || 1;
       p.vx = ax*s.chase; p.vy = (p.y - T.y) > 0 ? 60 : -60; T.rams++;
@@ -2159,6 +2398,7 @@ function updateParts(dt){
     if (q.type === "sand"){ q.vy += 300*dt; }
     else if (q.type === "splash"){ q.vy += 260*dt; }
     else if (q.type === "gold"){ q.vy += 120*dt; q.vx *= .97; }
+    else if (q.type === "feather"){ q.vy += 40*dt; q.vx *= .96; q.vy = Math.min(q.vy, 40); q.x += Math.sin(time*5 + q.r*7)*20*dt; }
     else if (q.type === "grass"){ q.vx *= .96; q.vy = q.vy*.96 - 6*dt; }
     else if (q.type === "bubble"){ q.x += Math.sin(time*4 + q.r*9)*8*dt; if (q.y < SURF || (OCEAN.home && q.y > groundY(q.x) && q.y < CAVE.wl + 2) || (POCKET && q.y > groundY(q.x) && !inPocket(q.x, q.y, 0))) q.life = 0; }
   }
@@ -2958,8 +3198,8 @@ function drawBabies(){
     }
   }
 }
-function drawTurtle(x, y, r, ang, phase, stage, swim, alpha){
-  const C = [
+function drawTurtle(x, y, r, ang, phase, stage, swim, alpha, pal){
+  const C = pal || [
     {shell:"#3a3125", rim:"#594a33", skin:"#71675a", scute:"rgba(255,240,210,.2)"},
     {shell:"#5b5631", rim:"#7b7445", skin:"#9b9173", scute:"rgba(255,245,200,.24)"},
     {shell:"#4d6a3c", rim:"#6f8c4f", skin:"#94a87e", scute:"rgba(240,255,210,.26)"},
@@ -3114,7 +3354,8 @@ function drawParts(){
       ctx.strokeStyle = `rgba(220,245,240,${.6*a + .2})`; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.arc(q.x, q.y, q.r, 0, TAU); ctx.stroke();
     } else {
-      ctx.fillStyle = q.type === "sting" ? `rgba(240,150,230,${a})` : q.type === "gold" ? `rgba(242,201,76,${a})` : q.type === "grass" ? `rgba(108,191,115,${a})` : q.type === "sand" ? `rgba(220,202,160,${a})` : `rgba(234,244,238,${a})`;
+      if (q.type === "rainbow"){ ctx.globalAlpha = a; ctx.fillStyle = q.c; ctx.beginPath(); ctx.arc(q.x, q.y, q.r, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; continue; }
+      ctx.fillStyle = q.type === "feather" ? `rgba(245,247,246,${a})` : q.type === "sting" ? `rgba(240,150,230,${a})` : q.type === "gold" ? `rgba(242,201,76,${a})` : q.type === "grass" ? `rgba(108,191,115,${a})` : q.type === "sand" ? `rgba(220,202,160,${a})` : `rgba(234,244,238,${a})`;
       ctx.beginPath(); ctx.arc(q.x, q.y, q.r, 0, TAU); ctx.fill();
     }
   }
@@ -3168,6 +3409,9 @@ function drawMinimap(){
     if (p.food <= 0 || p.cave) continue;
     ctx.fillStyle = p.float ? `rgba(217,180,90,${.4 + .6*p.food/p.max})` : `rgba(108,191,115,${.4 + .6*p.food/p.max})`;
     ctx.fillRect(mx + (p.x - p.w/2)*sx, my + ((p.float ? SURF : groundY(p.x)) + oy)*sy - 3, Math.max(2, p.w*sx), 3);
+  }
+  if (secretObj && secretObj.turtles){
+    for (const t of secretObj.turtles){ ctx.fillStyle = t.met ? "rgba(234,244,238,.7)" : "#6cbf73"; ctx.beginPath(); ctx.arc(mx + t.x*sx, my + (t.y + oy)*sy, 2.4, 0, TAU); ctx.fill(); }
   }
   ctx.fillStyle = "#6cbf73";
   for (const b of babies){ if (b.state === "follow" && b.ocean === OCEAN.id){ ctx.beginPath(); ctx.arc(mx + b.x*sx, my + (b.y + oy)*sy, 1.6, 0, TAU); ctx.fill(); } }
@@ -3228,7 +3472,7 @@ function render(){
   drawSchools();
   drawJellies();
   drawHazards();
-  for (const g of gulls) drawGullMark(g);
+  for (const g of gulls) if (!g.dead) drawGullMark(g);
   for (const p of preds){
     const pad = p.s.leash ? 220 : p.s.len;
     if (p.x + pad < cam.x || p.x - pad > cam.x + viewW || p.y + pad < cam.y || p.y - pad > cam.y + viewH) continue;
@@ -3238,6 +3482,11 @@ function render(){
   let alpha = T.inv > 0 && state === "play" ? (Math.sin(time*30) > 0 ? .35 : 1) : 1;
   if (T.hidden) alpha *= .72;
   drawElder();
+  if (OCEAN.secretLevel) drawSkyTurtles();
+  if (T.rainbowTrail && (T.leap || T.dashT > 0) && Math.random() < .8){
+    const cols = ["#ff5f6d","#ffa94d","#ffe066","#69db7c","#4dabf7","#9775fa"];
+    parts.push({x:T.x + rnd(-6,6), y:T.y + rnd(-6,6), vx:-T.vx*.1, vy:-T.vy*.1, life:.6, max:.6, type:"rainbow", r:rnd(2.5,4), c:cols[Math.floor(Math.random()*cols.length)]});
+  }
   drawTurtle(T.x, T.y, S.r, T.ang, T.phase, T.stage, T.swimming || T.leap, alpha);
   if (T.starShell){
     for (let i = 0; i < 5; i++){
@@ -3250,7 +3499,7 @@ function render(){
   drawNets();
   drawKelp(true);
   drawParts();
-  for (const g of gulls) drawGull(g);
+  for (const g of gulls) if (!g.dead) drawGull(g);
   drawSnow();
   drawSurface();
   drawIce();
@@ -3359,7 +3608,12 @@ function updHud(){
     else if (showNest) hint = "Good nesting sand. Press E or tap Lay eggs.";
     else if (gullMark && T.stage === 0) hint = T.onLand ? "Gull diving! Turn around or stop so the ring misses you." : "Gull diving! Swim down under the water.";
     else if (T.leap) hint = "Wheee!";
+    else if (OCEAN.secretLevel && secretObj && secretObj.turtles && secretObj.turtles.some(t => !t.met && Math.hypot(T.x - t.x, T.y - t.y) < 450)) hint = "Another kind of sea turtle! Swim up to say hi.";
     else if (OCEAN.secretLevel && secretObj && secretObj.con && !secretObj.con.found && Math.abs(T.x - secretObj.con.x) < 600) hint = "Those stars just above the water make the shape of a turtle. If only you could jump that high. Try dashing straight up at the surface.";
+    else if (OCEAN.secretLevel && secretObj && secretObj.rainbow && !secretObj.rainbow.found && Math.abs(T.x - secretObj.rainbow.x) < 300) hint = "A rainbow over the water. What if you leaped right through it?";
+    else if (OCEAN.secretLevel && secretObj && secretObj.storm && !secretObj.storm.found && Math.abs(T.x - secretObj.storm.x) < 400) hint = "That little storm cloud keeps flashing. It looks grumpy.";
+    else if (OCEAN.secretLevel && secretObj && secretObj.pearl && !secretObj.pearl.found && Math.hypot(T.x - secretObj.pearl.x, T.y - secretObj.pearl.y) < 350) hint = "Something glints inside that cloud on the floor.";
+    else if (OCEAN.home && T.atSurface && T.stage > 0 && T.gullsEaten === 0 && gulls.some(g => !g.dead && Math.abs(g.x - T.x) < 300)) hint = "A gull overhead. Dash straight up to leap out and catch it.";
     else if (OCEAN.secretLevel) hint = secretObj && !secretObj.wish.taken ? "The Sky Sea! Grab the stars to grow fast. The Wishing Star waits by the Moon Gate, far to the east. Swim off either edge to float back down." : "Swim off either edge of the Sky Sea to float back down to your beach.";
     else if (T.cave && POCKET) hint = secretObj && !secretObj.taken ? "A glowing grotto hidden inside the reef wall. The great clam holds a black pearl." : "A glowing grotto hidden inside the reef wall.";
     else if (T.cave) hint = relic && !relic.taken ? "A hidden cave. Grab the golden shell. The tunnel to the east leads back to the sea." : "Golden seagrass heals your shell. The tunnel to the east leads back to the sea.";
