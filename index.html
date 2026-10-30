@@ -145,6 +145,8 @@ body{
 .diff-btns button{font:18px var(--display);color:var(--foam);background:rgba(234,244,238,.06);border:1px solid var(--line);border-radius:10px;padding:9px 6px;cursor:pointer}
 .diff-btns button:hover{background:rgba(234,244,238,.12)}
 .diff-btns button[aria-checked="true"]{background:var(--kelp);color:#13240f;border-color:var(--kelp)}
+.diff-btns button.diff-insane{grid-column:1/-1;border-color:rgba(255,90,70,.55);color:#ffb3a6}
+.diff-btns button.diff-insane[aria-checked="true"]{background:#d63c2a;border-color:#d63c2a;color:#fff}
 .diff-btns button:focus-visible{outline:2px solid var(--moon);outline-offset:2px}
 .card .diff-desc{margin:0;font-size:13px;line-height:1.4;color:var(--mist);min-height:2.8em}
 .kind-card{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radius:12px;background:rgba(108,191,115,.12);border:1px solid rgba(108,191,115,.4)}
@@ -154,6 +156,19 @@ body{
 .threat-head{margin:0 0 -6px;font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--mist)}
 .heir-note{margin:0;padding:10px 12px;border-radius:10px;background:rgba(108,191,115,.12);border:1px solid rgba(108,191,115,.35);font-size:14px;line-height:1.45}
 .travel-card{max-width:560px}
+.journal-card{max-width:900px}
+.jr-bar{height:8px;border-radius:99px;background:rgba(234,244,238,.1);overflow:hidden}
+.jr-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#6cbf73,#f2c94c);border-radius:99px}
+.jr-sec{display:flex;flex-direction:column;gap:8px}
+.card .jr-sec h3{margin:6px 0 0;font:22px var(--display);font-weight:400;color:var(--moon)}
+.jr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.jr-item{display:flex;flex-direction:column;gap:3px;padding:8px 10px 10px;border-radius:12px;background:rgba(234,244,238,.05);border:1px solid var(--line);min-width:0}
+.jr-item.new{border-color:#f2c94c;box-shadow:0 0 0 1px rgba(242,201,76,.4)}
+.jr-item canvas{width:100%;height:auto;aspect-ratio:12/7;display:block}
+.card .jr-name{margin:0;font:17px var(--display);color:var(--foam);overflow-wrap:anywhere}
+.jr-item.locked .jr-name{color:var(--mist)}
+.card .jr-where{margin:0;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mist)}
+.card .jr-fact{margin:0;font-size:13px;line-height:1.4;color:var(--foam);opacity:.9}
 @media (min-width:760px){.travel-card{max-width:860px}.ocean-list{grid-template-columns:1fr 1fr}}
 .ocean-list{display:grid;gap:8px}
 .ocean-opt{
@@ -241,6 +256,7 @@ img{max-width:100%}
   <div class="stat" id="babyStat" hidden><span class="lab">Hatchlings</span><span class="num" id="babyNum">0</span></div>
   <div class="stat flag" id="flag" hidden>Hidden</div>
   <div class="actions">
+    <button class="icon-btn" id="journalBtn" type="button">Journal</button>
     <button class="icon-btn" id="hatchBtn" type="button">Hatch again</button>
     <button class="icon-btn" id="pauseBtn" type="button" aria-label="Pause">Pause</button>
   </div>
@@ -309,6 +325,7 @@ img{max-width:100%}
         <button type="button" data-diff="hard" role="radio">Hard</button>
         <button type="button" data-diff="veryhard" role="radio">Very Hard</button>
         <button type="button" data-diff="impossible" role="radio">Impossible</button>
+        <button type="button" data-diff="insane" role="radio" class="diff-insane">Insane Impossible</button>
       </div>
       <p class="diff-desc"></p>
     </div>
@@ -326,6 +343,17 @@ img{max-width:100%}
       <button class="btn" id="resumeBtn" type="button">Resume</button>
       <button class="btn ghost" id="restartBtn" type="button">Restart</button>
     </div>
+  </div>
+</section>
+
+<section class="overlay" id="ovJournal" hidden>
+  <div class="card journal-card">
+    <p class="eyebrow">Sea Journal</p>
+    <h2>Creatures you've met</h2>
+    <p id="jrProgress"></p>
+    <div class="jr-bar" aria-hidden="true"><i id="jrFill"></i></div>
+    <div id="jrList"></div>
+    <button class="btn" id="jrClose" type="button">Back to the sea</button>
   </div>
 </section>
 
@@ -361,6 +389,7 @@ img{max-width:100%}
         <button type="button" data-diff="hard" role="radio">Hard</button>
         <button type="button" data-diff="veryhard" role="radio">Very Hard</button>
         <button type="button" data-diff="impossible" role="radio">Impossible</button>
+        <button type="button" data-diff="insane" role="radio" class="diff-insane">Insane Impossible</button>
       </div>
       <p class="diff-desc"></p>
     </div>
@@ -732,7 +761,8 @@ const DIFFS = {
   medium:{name:"Medium", detect:1,    chase:1,   hp:0,  air:1,   net:1,   gull:1,    desc:"The ocean as it was meant to be."},
   hard:  {name:"Hard",   detect:1.25, chase:1.12, hp:-1, air:.8,  net:.75, gull:.8,  desc:"Predators spot you sooner and swim faster. One less shell and less air."},
   veryhard:{name:"Very Hard", detect:1.5, chase:1.22, hp:-1, air:.7, net:.6, gull:.65, desc:"Predators see you from far away and chase hard. One less shell, 30% less air, nets hold tight."},
-  impossible:{name:"Impossible", detect:1.8, chase:1.3, hp:-2, air:.6, net:.5, gull:.5, desc:"A hatchling gets one shell. 40% less air. Everything hunts you. (It isn't actually impossible.)"}
+  impossible:{name:"Impossible", detect:1.8, chase:1.3, hp:-2, air:.6, net:.5, gull:.5, gulls:5, desc:"A hatchling gets one shell. 40% less air. Five gulls guard the beach and everything hunts you. (It isn't actually impossible.)"},
+  insane:{name:"Insane Impossible", detect:1000, chase:1.3, hp:-2, air:.6, net:.5, gull:.5, gulls:20, dives:3, desc:"20 gulls, and up to 3 dive at the same time. Every hunter in the ocean can see you from anywhere, even when you hide. One shell and 40% less air."}
 };
 let DIFF = "medium";
 try { const d = localStorage.getItem("turtle-cove-difficulty"); if (DIFFS[d]) DIFF = d; } catch(_){}
@@ -848,7 +878,7 @@ let lmNear = null;
 const cam = {x:0, y:0};
 let toastT = 0;
 
-function makeGull(i){ return {x:300+i*260, y:120, state:"circle", t:3.5+i*2.6, phase:rnd(0,TAU), off:i*2.4, face:1, tx:0, ty:0, sx:0, sy:0, mt:1.25}; }
+function makeGull(i){ return {x:300+i*260, y:120, state:"circle", t:(DIFFS[DIFF].gulls || 2) > 5 ? rnd(2, 6) : 3.5+i*2.6, phase:rnd(0,TAU), off:i*2.4, face:1, tx:0, ty:0, sx:0, sy:0, mt:1.25}; }
 function makePred(type, x, home, minX, maxX){
   return {type, s:SPECS[type], x, y:home, home, hx:x, minX, maxX, vx:0, vy:0, dir:Math.random()<.5?-1:1,
           state:"patrol", t:0, tired:1+Math.random()*2, off:rnd(0,TAU), face:1, tilt:0, tail:rnd(0,TAU)};
@@ -995,7 +1025,7 @@ function genHazards(){
 }
 function populate(){
   const o = OCEAN;
-  gulls = o.home ? [makeGull(0), makeGull(1)] : [];
+  gulls = o.home ? Array.from({length:DIFFS[DIFF].gulls || 2}, (_, i) => makeGull(i)) : [];
   preds = [];
   const add = (type, gap, x0, yFn, range) => {
     for (let x = x0; x < W-100; x += rnd(gap[0], gap[1]))
@@ -1130,6 +1160,8 @@ const keys = {};
 let touch = null;
 window.addEventListener("keydown", e => {
   const k = e.key.toLowerCase();
+  if (journalOpen){ if (k === "escape" || k === "j") closeJournal(); return; }
+  if (k === "j" && !e.repeat && state !== "talk"){ openJournal(); return; }
   if (["arrowup","arrowdown","arrowleft","arrowright"," "].includes(k) && state === "play") e.preventDefault();
   // in a net, only switching to a different direction counts as a wiggle
   const NET_DIR = {arrowup:"u", w:"u", arrowdown:"d", s:"d", arrowleft:"l", a:"l", arrowright:"r", d:"r"};
@@ -1275,7 +1307,7 @@ function update(dt){
     }
   }
   const active = state === "play";
-  if (active){ runT += dt; updateTurtle(dt); if (state === "play") updateGold(dt); }
+  if (active){ runT += dt; updateTurtle(dt); if (state === "play") updateGold(dt); if (state === "play") updateJournal(dt); }
   if (state === "play") updateMissions();
   updateGulls(dt, active);
   updatePreds(dt, active);
@@ -2121,6 +2153,7 @@ const SECRETS_KEY = "turtle-cove-secrets";
 // secrets last for one game (and pass down to your own hatchlings); nothing is kept between games
 function saveSecrets(){}
 function secretFound(id, name){
+  if (JR_BY_ID[id]) spot(id);
   if (T.secrets.has(id)) return;
   T.secrets.add(id);
   saveSecrets();
@@ -3559,6 +3592,176 @@ function travelTo(i, at){
 }
 $("stayBtn").addEventListener("click", stayHere);
 
+/* ---------- Sea Journal: a creature collection that is saved between games ---------- */
+const JOURNAL = [
+  // predators
+  {id:"grouper",   g:"Hunters", name:"Grouper", where:"Atlantic, Mediterranean", fact:"Groupers gulp prey whole by opening their huge mouths fast. Some grow longer than a grown-up person."},
+  {id:"barracuda", g:"Hunters", name:"Barracuda", where:"Atlantic, Mediterranean", fact:"Barracuda have long fang-like teeth and burst forward at top speed to ambush prey."},
+  {id:"shark",     g:"Hunters", name:"Tiger shark", where:"Atlantic, Maldives, Bermuda", fact:"Tiger sharks are named for the stripes on young sharks. They eat almost anything, even sea turtles."},
+  {id:"mahi",      g:"Hunters", name:"Mahi-mahi", where:"Sargasso Sea", fact:"Mahi-mahi are fast, bright green and gold fish that hunt under floating weed in the open ocean."},
+  {id:"oshark",    g:"Hunters", name:"Oceanic whitetip", where:"Sargasso Sea, Bermuda", fact:"Oceanic whitetips roam the open ocean far from land. Look for the white tips on their big round fins."},
+  {id:"reefshark", g:"Hunters", name:"Reef shark", where:"Coral Reef, Maldives", fact:"Blacktip reef sharks patrol coral reefs and do most of their hunting at night."},
+  {id:"moray",     g:"Hunters", name:"Moray eel", where:"Coral Reef", fact:"Morays hide in rocky holes with just their heads out, then lunge at anything that swims too close."},
+  {id:"orca",      g:"Hunters", name:"Orca", where:"Frozen North, Southern Ocean", fact:"Orcas are the biggest kind of dolphin. They hunt together in family groups called pods."},
+  {id:"gshark",    g:"Hunters", name:"Greenland shark", where:"Frozen North, Deep Trench", fact:"Greenland sharks swim slowly through icy water and can live for hundreds of years."},
+  {id:"blue",      g:"Hunters", name:"Blue shark", where:"Mediterranean Sea", fact:"Blue sharks have slim bodies and bright blue backs, and they travel across whole oceans."},
+  {id:"gwhite",    g:"Hunters", name:"Great white shark", where:"Kelp Coast", fact:"Great whites are the biggest hunting fish in the sea. They often attack from below."},
+  {id:"hammer",    g:"Hunters", name:"Hammerhead shark", where:"Galapagos Islands", fact:"A hammerhead has an eye at each end of its wide head, which helps it scan the sea floor for food."},
+  {id:"bull",      g:"Hunters", name:"Bull shark", where:"Mangrove Bay", fact:"Bull sharks can swim from the sea up into rivers, because they can live in fresh water too."},
+  {id:"galshark",  g:"Hunters", name:"Galapagos shark", where:"Galapagos Islands", fact:"Galapagos sharks live around ocean islands and often gather in groups."},
+  {id:"croc",      g:"Hunters", name:"Saltwater crocodile", where:"Mangrove Bay", fact:"Saltwater crocodiles are the biggest reptiles alive, and they can swim far out to sea."},
+  {id:"seabass",   g:"Hunters", name:"Giant sea bass", where:"Kelp Coast", fact:"Giant sea bass can grow bigger than a person and live for more than 70 years."},
+  {id:"angler",    g:"Hunters", name:"Anglerfish", where:"Deep Trench", fact:"A glowing lure on an anglerfish's head tricks little animals into swimming right up to its mouth."},
+  {id:"leopard",   g:"Hunters", name:"Leopard seal", where:"Southern Ocean", fact:"Leopard seals are spotted hunters of the Antarctic ice. Only orcas are bigger hunters there."},
+  {id:"mosasaur",  g:"Hunters", name:"Mosasaur", where:"Prehistoric Sea", fact:"Mosasaurs were giant sea reptiles from the time of the dinosaurs. Some were longer than a school bus."},
+  // others
+  {id:"gull",      g:"Other creatures", name:"Gull", where:"Atlantic beach", fact:"Gulls grab hatchlings on the beach. That's why baby turtles race to the sea, usually at night."},
+  {id:"jelly",     g:"Other creatures", name:"Jellyfish", where:"Almost every ocean", fact:"Jellyfish have no brain, heart or bones. Many sea turtles love to eat them."},
+  {id:"plastic",   g:"Other creatures", name:"Plastic bag", where:"Most oceans", fact:"Floating plastic bags look like jellyfish, and turtles sometimes eat them by mistake. Less plastic means safer turtles."},
+  {id:"lionfish",  g:"Other creatures", name:"Lionfish", where:"Coral Reef", fact:"A lionfish's frilly fins hide venomous spines that warn other animals to stay away."},
+  {id:"manowar",   g:"Other creatures", name:"Portuguese man o' war", where:"Sargasso Sea", fact:"A man o' war is not one animal but a team of tiny animals living together. Its stinging tentacles hang far below it."},
+  {id:"clam",      g:"Other creatures", name:"Pearl clam", where:"Many oceans", fact:"Clams and oysters make pearls by coating a bit of grit with smooth, shiny layers."},
+  // sea turtles (unlocked by hatching as one, or by meeting one in the Sky Sea)
+  {id:"t_green",       g:"Sea turtles", name:"Green sea turtle", where:"Hatch as one", fact:"Green sea turtles are named for the green fat under their shells, from eating seagrass."},
+  {id:"t_leatherback", g:"Sea turtles", name:"Leatherback", where:"Hatch as one", fact:"Leatherbacks are the biggest turtles alive. Their shell is leathery, and they dive over 1,000 meters deep."},
+  {id:"t_hawksbill",   g:"Sea turtles", name:"Hawksbill", where:"Hatch as one", fact:"Hawksbills have a pointy beak, perfect for reaching into cracks in the coral to eat sponges."},
+  {id:"t_loggerhead",  g:"Sea turtles", name:"Loggerhead", where:"Hatch as one", fact:"Loggerheads have huge heads and strong jaws for crunching crabs and shellfish."},
+  {id:"t_olive",       g:"Sea turtles", name:"Olive ridley", where:"Hatch as one", fact:"Olive ridleys nest in huge groups called arribadas, with thousands of turtles coming ashore together."},
+  {id:"t_kemps",       g:"Sea turtles", name:"Kemp's ridley", where:"Hatch as one", fact:"Kemp's ridley is the smallest and rarest sea turtle, and it nests in the daytime."},
+  {id:"t_flatback",    g:"Sea turtles", name:"Flatback", where:"Hatch as one", fact:"Flatbacks have the flattest shells of any sea turtle and only nest in Australia."},
+  // wonders (unlocked by finding the secret)
+  {id:"dolphins",   g:"Wonders", name:"Dolphins", where:"Mediterranean Sea", fact:"Every dolphin has its own whistle that works like a name."},
+  {id:"octopus",    g:"Wonders", name:"Octopus", where:"Mediterranean Sea", fact:"Octopuses have three hearts and blue blood."},
+  {id:"otter",      g:"Wonders", name:"Sea otter", where:"Kelp Coast", fact:"Sea otters hold hands while they sleep so they don't drift apart."},
+  {id:"sealions",   g:"Wonders", name:"Sea lions", where:"Kelp Coast", fact:"Sea lions can walk on their flippers. Seals can't."},
+  {id:"manatee",    g:"Wonders", name:"Manatee", where:"Mangrove Bay", fact:"Manatees are related to elephants."},
+  {id:"archer",     g:"Wonders", name:"Archerfish", where:"Mangrove Bay", fact:"Archerfish shoot jets of water to knock bugs off leaves."},
+  {id:"iguana",     g:"Wonders", name:"Marine iguana", where:"Galapagos Islands", fact:"Marine iguanas are the only lizards that swim in the sea."},
+  {id:"galpenguin", g:"Wonders", name:"Galapagos penguin", where:"Galapagos Islands", fact:"The only penguins that live this close to the equator."},
+  {id:"whaleshark", g:"Wonders", name:"Whale shark", where:"Maldives Atoll", fact:"The biggest fish in the world, and it eats tiny plankton."},
+  {id:"manta",      g:"Wonders", name:"Manta ray", where:"Maldives Atoll", fact:"Mantas visit cleaning stations where little fish clean them."},
+  {id:"squid",      g:"Wonders", name:"Giant squid", where:"Deep Trench", fact:"Giant squid have the biggest eyes of any animal."},
+  {id:"dumbo",      g:"Wonders", name:"Dumbo octopus", where:"Deep Trench", fact:"They live deeper than almost any other octopus."},
+  {id:"penguins",   g:"Wonders", name:"Emperor penguins", where:"Southern Ocean", fact:"Emperor dads keep their eggs warm on their feet all winter."},
+  {id:"bluewhale",  g:"Wonders", name:"Blue whale", where:"Southern Ocean", fact:"The biggest animal that has ever lived."},
+  {id:"walrus",     g:"Wonders", name:"Walrus", where:"Frozen North", fact:"Walruses use their tusks to haul themselves up onto the ice."},
+  {id:"owl",        g:"Wonders", name:"Snowy owl", where:"Frozen North, way up high", fact:"Snowy owls hunt in daylight during the long Arctic summer."},
+  {id:"flyingfish", g:"Wonders", name:"Flying fish", where:"Sargasso Sea, way up high", fact:"Flying fish glide over the water on wing-like fins to escape hunters."},
+  {id:"archelon",   g:"Wonders", name:"Archelon", where:"Prehistoric Sea", fact:"A real sea turtle over 4 meters long that lived 80 million years ago."},
+  {id:"pteranodon", g:"Wonders", name:"Pteranodon", where:"Prehistoric Sea", fact:"A flying reptile, a cousin of the dinosaurs."},
+  {id:"ammonite",   g:"Wonders", name:"Ammonite", where:"Prehistoric Sea", fact:"Ammonites lived in coiled shells. Today we find them as fossils."}
+];
+const JR_BY_ID = Object.fromEntries(JOURNAL.map(e => [e.id, e]));
+const JOURNAL_KEY = "turtle-cove-journal";
+let journal = new Set(), journalNew = new Set(), journalT = 0, journalOpen = false, journalPrev = null;
+try { const raw = JSON.parse(localStorage.getItem(JOURNAL_KEY) || "[]"); if (Array.isArray(raw)) journal = new Set(raw.filter(id => JR_BY_ID[id])); } catch(_){}
+function spot(id){
+  if (!JR_BY_ID[id] || journal.has(id)) return;
+  journal.add(id); journalNew.add(id);
+  try { localStorage.setItem(JOURNAL_KEY, JSON.stringify([...journal])); } catch(_){}
+  if (T && state === "play"){ T.pts += 50; toast(`New journal entry: ${JR_BY_ID[id].name}! +50`, "good", 2.2); }
+}
+function updateJournal(dt){
+  journalT -= dt; if (journalT > 0) return;
+  journalT = .4;
+  const on = (x, y) => x > cam.x && x < cam.x + viewW && y > cam.y && y < cam.y + viewH;
+  for (const p of preds) if (on(p.x, p.y)) spot(p.type);
+  for (const h of hazards) if (h.type === "lionfish" ? on(h.x, h.y) : on(h.x, SURF + 30)) spot(h.type);
+  for (const j of jellies) if (!(j.dead > 0) && on(j.x, j.y)) spot(j.plastic ? "plastic" : "jelly");
+  for (const g of gulls) if (!g.dead && on(g.x, g.y)) spot("gull");
+  for (const c of clams) if (on(c.x, c.y)) spot("clam");
+  spot("t_" + T.species);
+  for (const f of T.friends) spot("t_" + f);
+}
+// thumbnails are drawn with the game's own drawing code, then copied off the main canvas
+function jrThumbDraw(e){
+  const keep = {hazards, jellies, cx:cam.x, cy:cam.y};
+  try {
+    if (SPECS[e.id]){
+      const sp = SPECS[e.id], L = sp.len;
+      const k = Math.min(1.6, 150/(L*1.25));
+      ctx.scale(k, k);
+      drawPred({type:e.id, s:sp, x:0, y:0, face:1, tilt:0, tail:1, state:"patrol", off:0, holeY:30, hx:0, home:0, dir:1, vx:0, vy:0});
+    } else if (e.id.startsWith("t_")){
+      const sp = SPECIES.find(x => x.id === e.id.slice(2));
+      drawTurtle(0, 0, 26, 0, 1.2, 2, true, 1, e.id === "t_green" ? null : sp && sp.pal);
+    } else if (e.id === "archelon"){
+      drawTurtle(0, 0, 28, 0, 1, 2, true, 1, {shell:"#4a3a26", rim:"#6a5232", skin:"#7a6a52", scute:"rgba(30,20,10,.35)"});
+    } else if (e.id === "lionfish"){
+      cam.x = -viewW/2; cam.y = -viewH/2; ctx.scale(1.8, 1.8);
+      hazards = [{type:"lionfish", x:0, y:0, face:1, ph:0}]; drawHazards();
+    } else if (e.id === "manowar"){
+      cam.x = -viewW/2; cam.y = SURF - viewH/2; ctx.scale(.9, .9); ctx.translate(0, -SURF - 30);
+      hazards = [{type:"manowar", x:0, y:SURF, len:70, ph:0}]; drawHazards();
+    } else if (e.id === "jelly" || e.id === "plastic"){
+      cam.x = -viewW/2; cam.y = -viewH/2; ctx.scale(1.6, 1.6);
+      jellies = [{x:0, y:-6, size:16, ph:0, hue:300, plastic:e.id === "plastic", dead:0, vx:0}]; drawJellies();
+    } else if (e.id === "gull"){
+      ctx.scale(1.4, 1.4); drawGull({x:0, y:0, state:"circle", face:1, phase:.6, tx:0, ty:0, sx:0, sy:0});
+    } else {
+      // a gold star for the wonders
+      ctx.fillStyle = "#f2c94c"; ctx.beginPath();
+      for (let i = 0; i < 10; i++){ const a = -Math.PI/2 + i*Math.PI/5, r = i % 2 ? 11 : 26; ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r); }
+      ctx.closePath(); ctx.fill();
+    }
+  } catch(_){}
+  hazards = keep.hazards; jellies = keep.jellies; cam.x = keep.cx; cam.y = keep.cy;
+}
+function jrThumb(e, locked){
+  const w = 240, h = 140, c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, w, h);
+  ctx.translate(w/2, h/2);
+  jrThumbDraw(e);
+  ctx.restore();
+  const c2 = c.getContext("2d");
+  c2.drawImage(cv, 0, 0, w, h, 0, 0, w, h);
+  if (locked){ c2.globalCompositeOperation = "source-in"; c2.fillStyle = "rgba(150,180,195,.32)"; c2.fillRect(0, 0, w, h); }
+  return c;
+}
+function openJournal(){
+  if (journalOpen) return;
+  journalOpen = true;
+  journalPrev = {state, ov:["ovStart","ovPause","ovEnd","ovTravel"].find(id => !$(id).hidden) || null};
+  if (state === "play") state = "pause";
+  for (const k in keys) keys[k] = false; touch = null;
+  const list = $("jrList"); list.innerHTML = "";
+  const groups = [...new Set(JOURNAL.map(e => e.g))];
+  for (const g of groups){
+    const sec = document.createElement("div"); sec.className = "jr-sec";
+    const items = JOURNAL.filter(e => e.g === g), got = items.filter(e => journal.has(e.id)).length;
+    const h3 = document.createElement("h3"); h3.textContent = `${g} · ${got}/${items.length}`; sec.appendChild(h3);
+    const grid = document.createElement("div"); grid.className = "jr-grid";
+    for (const e of items){
+      const has = journal.has(e.id);
+      const it = document.createElement("div");
+      it.className = "jr-item" + (has ? "" : " locked") + (journalNew.has(e.id) ? " new" : "");
+      it.appendChild(jrThumb(e, !has));
+      const n = document.createElement("p"); n.className = "jr-name"; n.textContent = has ? e.name : "???"; it.appendChild(n);
+      const w = document.createElement("p"); w.className = "jr-where"; w.textContent = (has ? "" : "Find it: ") + e.where; it.appendChild(w);
+      if (has){ const f = document.createElement("p"); f.className = "jr-fact"; f.textContent = e.fact; it.appendChild(f); }
+      grid.appendChild(it);
+    }
+    sec.appendChild(grid); list.appendChild(sec);
+  }
+  $("jrProgress").textContent = `You've discovered ${journal.size} of ${JOURNAL.length} creatures. Your journal is saved between games. New discoveries are worth 50 points.`;
+  $("jrFill").style.width = (journal.size/JOURNAL.length*100).toFixed(1) + "%";
+  journalNew.clear();
+  for (const id of ["ovStart","ovPause","ovEnd","ovTravel"]) $(id).hidden = true;
+  $("ovJournal").hidden = false;
+  $("ovJournal").querySelector(".card").scrollTop = 0;
+  $("jrClose").focus({preventScroll:true});
+}
+function closeJournal(){
+  if (!journalOpen) return;
+  journalOpen = false;
+  $("ovJournal").hidden = true;
+  const pv = journalPrev || {state:"play", ov:null};
+  if (pv.state === "play"){ state = "play"; }
+  else { state = pv.state; if (pv.ov) $(pv.ov).hidden = false; }
+}
+$("journalBtn").addEventListener("click", () => journalOpen ? closeJournal() : openJournal());
+$("jrClose").addEventListener("click", closeJournal);
 /* ---------- Golden Jellyfish: a rare power-up that drifts in now and then ---------- */
 function spawnGold(){
   for (let tries = 0; tries < 30; tries++){
@@ -3787,7 +3990,7 @@ function updateGulls(dt, active){
       g.x = nx; g.y = lerp(g.y, hy, k);
       g.t -= dt;
       if (g.t <= 0){
-        const busy = gulls.some(o => o !== g && !o.dead && (o.state === "mark" || o.state === "dive"));
+        const busy = gulls.filter(o => o !== g && !o.dead && (o.state === "mark" || o.state === "dive")).length >= (DIFFS[DIFF].dives || 1);
         const crawlers = babies.filter(b => b.state === "crawl");
         if (canHunt && !busy){
           g.state = "mark"; g.mt = 1.25*DIFFS[DIFF].gull; g.t = g.mt; g.prey = "player";
@@ -5400,10 +5603,12 @@ function showKind(){ $("kindName").textContent = KINDS[T.species].name; $("kindT
 function startGame(fresh){
   resize(); $("dialog").hidden = true;
   if (fresh !== false) reset();
+  // the difficulty may have changed on the menu after the beach was set up
+  if (OCEAN.home) gulls = Array.from({length:DIFFS[DIFF].gulls || 2}, (_, i) => makeGull(i));
   T.hp = maxHp(); T.air = maxAir();
   state = "play"; show(null); $("toast").hidden = true; toastT = 0; lastHud = "";
   showKind();
-  showToast(`You hatched as a ${KINDS[T.species].name}! (${DIFFS[DIFF].name})`, "good", 2.6);
+  showToast(`You hatched as ${/^[aeiou]/i.test(KINDS[T.species].name) ? "an" : "a"} ${KINDS[T.species].name}! (${DIFFS[DIFF].name})`, "good", 2.6);
   toast(KINDS[T.species].trait, false, 3.6);
 }
 function togglePause(){
